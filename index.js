@@ -20,9 +20,12 @@ const pool = require("./db");
 app.get("/transactions", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, amount, category,
-              transaction_date AS date,
-              type, note
+      `SELECT id,
+       	amount::float AS amount,
+       	category,
+       	transaction_date AS date,
+       	type,
+       	note
        FROM transactions
        ORDER BY transaction_date DESC`
     );
