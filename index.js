@@ -21,12 +21,13 @@ app.get("/transactions", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id,
-       	amount::float AS amount,
-       	category,
-       	transaction_date AS date,
-       	type,
-       	note
+              amount::float AS amount,
+              category,
+              transaction_date AS date,
+              type,
+              note
        FROM transactions
+       WHERE deleted_at IS NULL
        ORDER BY transaction_date DESC`
     );
 
@@ -48,6 +49,23 @@ app.post("/transactions", async (req, res) => {
     );
 
     res.status(201).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/transactions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query(
+      `UPDATE transactions
+       SET deleted_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
