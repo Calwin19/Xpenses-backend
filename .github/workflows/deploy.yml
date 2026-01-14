@@ -20,5 +20,5 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/Xpenses-bakend
+            cd ~/Xpenses-backend
             ./deploy.sh
