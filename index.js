@@ -92,6 +92,38 @@ app.delete("/transactions/:id", async (req, res) => {
   }
 });
 
+app.put("/transactions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, category, date, type, note } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE transactions
+      SET amount = $1,
+          category = $2,
+          transaction_date = $3,
+          type = $4,
+          note = $5,
+          updated_at = NOW()
+      WHERE id = $6
+        AND deleted_at IS NULL
+      RETURNING *
+      `,
+      [amount, category, date, type, note, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("UPDATE TRANSACTION ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/transactions/import", async (req, res) => {
   try {
     const {
