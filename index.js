@@ -117,7 +117,14 @@ app.put("/transactions/:id", async (req, res) => {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
-    res.json(result.rows[0]);
+    res.json({
+      id: result.rows[0].id,
+      amount: Number(result.rows[0].amount),
+      category: result.rows[0].category,
+      date: result.rows[0].transaction_date,
+      type: result.rows[0].type,
+      note: result.rows[0].note
+    });
   } catch (err) {
     console.error("UPDATE TRANSACTION ERROR:", err);
     res.status(500).json({ error: err.message });
