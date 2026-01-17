@@ -1,10 +1,11 @@
 const crypto = require("crypto");
 function parseKotakTransaction(text) {
   const amountMatch = text.match(/INR\s+(\d+)/i);
-  const dateMatch = text.match(/on\s+(\d{2}-[A-Za-z]{3}-\d{4})/);
-  let merchantMatch =
-  text.match(/at\s+UPI-[\d\-]+-([A-Z\s]+)/i) ||
-  text.match(/at\s+([A-Z][A-Z\s&.-]+)\s+on/i);
+  const dateMatch = text.match(/on\s+(\d{2}-[A-Za-z]{3}-\d{4})/i);
+
+  const merchantMatch =
+    text.match(/at\s+UPI-[\d\-]+-([A-Z\s]+?)\s+on\s+/i) ||
+    text.match(/at\s+([A-Z][A-Z\s&.-]+?)\s+on\s+/i);
 
   if (!amountMatch || !merchantMatch || !dateMatch) return null;
 

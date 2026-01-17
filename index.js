@@ -143,7 +143,6 @@ app.post("/transactions/import", async (req, res) => {
       rawText
     } = req.body;
 
-    // Prevent duplicates
     const existing = await pool.query(
       "SELECT 1 FROM transactions WHERE fingerprint = $1",
       [fingerprint]
@@ -153,26 +152,42 @@ app.post("/transactions/import", async (req, res) => {
       return res.status(200).json({ skipped: true });
     }
 
+    const learned = await pool.query(
+      `
+      SELECT category, note
+      FROM transactions
+      WHERE destination = $1
+        AND category IS NOT NULL
+      ORDER BY updated_at DESC
+      LIMIT 1
+      `,
+      [merchant]
+    );
+
+    const category = learned.rows[0]?.category ?? "Uncategorized";
+    const note = learned.rows[0]?.note ?? null;
+
     await pool.query(
       `
       INSERT INTO transactions
-      (id, amount, category, transaction_date, type, note, fingerprint, source)
+      (id, amount, category, note, transaction_date, type, source, destination, fingerprint)
       VALUES
-      (gen_random_uuid(), $1, $2, $3, 'Debit', $4, $5, $6)
+      (gen_random_uuid(), $1, $2, $3, $4, 'Debit', $5, $6, $7)
       `,
       [
         amount,
-        "Uncategorized",
-        date,
-        merchant,
-        fingerprint,
-        source
+        category,
+        note,
+        date,                
+        source,             
+        merchant,          
+        fingerprint
       ]
     );
 
     res.status(201).json({ imported: true });
   } catch (err) {
-    console.error(err);
+    console.error("IMPORT ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
