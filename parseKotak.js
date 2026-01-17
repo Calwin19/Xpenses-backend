@@ -11,7 +11,7 @@ function parseKotakTransaction(text) {
   return {
     amount: Number(amountMatch[1]),
     merchant: merchantMatch[1].trim(),
-    date: new Date(dateMatch[1]),
+    date: Math.floor(new Date(dateMatch[1]).getTime() / 1000),
     type: "Debit",
     source: "Kotak Credit Card",
     rawText: text

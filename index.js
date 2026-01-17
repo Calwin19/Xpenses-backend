@@ -41,15 +41,18 @@ const pool = require("./db");
 app.get("/transactions", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id,
-              amount::float AS amount,
-              category,
-              transaction_date AS date,
-              type,
-              note
-       FROM transactions
-       WHERE deleted_at IS NULL
-       ORDER BY transaction_date DESC`
+      `
+      SELECT
+        id,
+        amount::float AS amount,
+        category,
+        transaction_date::double precision AS timestamp,
+        type,
+        note
+      FROM transactions
+      WHERE deleted_at IS NULL
+      ORDER BY transaction_date DESC
+      `
     );
 
     res.json(result.rows);
@@ -59,20 +62,18 @@ app.get("/transactions", async (req, res) => {
 });
 
 app.post("/transactions", async (req, res) => {
-  try {
-    const { id, amount, category, date, type, note } = req.body;
+  const { id, amount, category, timestamp, type, note } = req.body;
 
-    await pool.query(
-      `INSERT INTO transactions
-       (id, amount, category, transaction_date, type, note)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, amount, category, date, type, note]
-    );
+  await pool.query(
+    `
+    INSERT INTO transactions
+    (id, amount, category, transaction_date, type, note)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [id, amount, category, timestamp, type, note]
+  );
 
-    res.status(201).json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ success: true });
 });
 
 app.delete("/transactions/:id", async (req, res) => {
@@ -121,7 +122,7 @@ app.put("/transactions/:id", async (req, res) => {
       id: result.rows[0].id,
       amount: Number(result.rows[0].amount),
       category: result.rows[0].category,
-      date: result.rows[0].transaction_date,
+      timestamp: Number(result.rows[0].transaction_date),
       type: result.rows[0].type,
       note: result.rows[0].note
     });
