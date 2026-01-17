@@ -48,7 +48,9 @@ app.get("/transactions", async (req, res) => {
         category,
         transaction_date::double precision AS timestamp,
         type,
-        note
+        note,
+        source,
+        destination
       FROM transactions
       WHERE deleted_at IS NULL
       ORDER BY transaction_date DESC
@@ -57,6 +59,7 @@ app.get("/transactions", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
+    console.error("GET TRANSACTIONS ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
