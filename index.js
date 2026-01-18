@@ -65,7 +65,7 @@ app.get("/transactions", async (req, res) => {
 });
 
 app.post("/transactions", async (req, res) => {
-  const { id, amount, category, timestamp, type, note } = req.body;
+  const { id, amount, category, date, type, note } = req.body;
 
   await pool.query(
     `
@@ -73,7 +73,7 @@ app.post("/transactions", async (req, res) => {
     (id, amount, category, transaction_date, type, note)
     VALUES ($1, $2, $3, $4, $5, $6)
     `,
-    [id, amount, category, timestamp, type, note]
+    [id, amount, category, date, type, note]
   );
 
   res.json({ success: true });
