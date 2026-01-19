@@ -40,8 +40,7 @@ const pool = require("./db");
 
 app.get("/transactions", async (req, res) => {
   try {
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT
         id,
         amount::float AS amount,
@@ -50,12 +49,13 @@ app.get("/transactions", async (req, res) => {
         type,
         note,
         source,
-        destination
+        destination,
+        borrower,
+        did_pay
       FROM transactions
       WHERE deleted_at IS NULL
       ORDER BY transaction_date DESC
-      `
-    );
+    `);
 
     res.json(result.rows);
   } catch (err) {
@@ -65,15 +65,33 @@ app.get("/transactions", async (req, res) => {
 });
 
 app.post("/transactions", async (req, res) => {
-  const { id, amount, category, date, type, note } = req.body;
+  const {
+    id,
+    amount,
+    category,
+    date,
+    type,
+    note,
+    borrower,
+    didPay
+  } = req.body;
 
   await pool.query(
     `
     INSERT INTO transactions
-    (id, amount, category, transaction_date, type, note)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    (id, amount, category, transaction_date, type, note, borrower, did_pay)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `,
-    [id, amount, category, date, type, note]
+    [
+      id,
+      amount,
+      category,
+      date,
+      type,
+      note,
+      borrower ?? null,
+      didPay ?? false
+    ]
   );
 
   res.json({ success: true });
@@ -99,7 +117,15 @@ app.delete("/transactions/:id", async (req, res) => {
 app.put("/transactions/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount, category, date, type, note } = req.body;
+    const {
+      amount,
+      category,
+      date,
+      type,
+      note,
+      borrower,
+      didPay
+    } = req.body;
 
     const result = await pool.query(
       `
@@ -109,12 +135,23 @@ app.put("/transactions/:id", async (req, res) => {
           transaction_date = $3,
           type = $4,
           note = $5,
+          borrower = $6,
+          did_pay = $7,
           updated_at = NOW()
-      WHERE id = $6
+      WHERE id = $8
         AND deleted_at IS NULL
       RETURNING *
       `,
-      [amount, category, date, type, note, id]
+      [
+        amount,
+        category,
+        date,
+        type,
+        note,
+        borrower ?? null,
+        didPay ?? false,
+        id
+      ]
     );
 
     if (result.rowCount === 0) {
@@ -127,7 +164,11 @@ app.put("/transactions/:id", async (req, res) => {
       category: result.rows[0].category,
       timestamp: Number(result.rows[0].transaction_date),
       type: result.rows[0].type,
-      note: result.rows[0].note
+      note: result.rows[0].note,
+      source: result.rows[0].source,
+      destination: result.rows[0].destination,
+      borrower: result.rows[0].borrower,
+      did_pay: result.rows[0].did_pay
     });
   } catch (err) {
     console.error("UPDATE TRANSACTION ERROR:", err);
