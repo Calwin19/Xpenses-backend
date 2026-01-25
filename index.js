@@ -3,41 +3,23 @@ require("dotenv").config();
 console.log("DATABASE_URL =", process.env.DATABASE_URL);
 const express = require("express");
 const app = express();
-const session = require("express-session");
 const crypto = require("crypto"); 
 const { insertIfNotExists } = require("./transactionsRepo");
 const { fetchKotakEmails, readEmail } = require("./gmail");
 const { parseKotakTransaction } = require("./parseKotak");
-
-app.use(
-  session({
-    secret: "xpenses-secret",
-    resave: false,
-    saveUninitialized: true
-  })
-);
-
-const fs = require("fs");
-const { google } = require("googleapis");
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+const gmailAuthRoutes = require("./gmailOAuth");
+const pool = require("./db");
 
 app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.json({ message: "Hi this is calwin's instance" });
-});
 
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-const pool = require("./db");
+app.get("/", (req, res) => {
+  res.json({ message: "Hi this is calwin's instance" });
+});
 
 app.get("/transactions", async (req, res) => {
   try {
@@ -66,16 +48,7 @@ app.get("/transactions", async (req, res) => {
 });
 
 app.post("/transactions", async (req, res) => {
-  const {
-    id,
-    amount,
-    category,
-    date,
-    type,
-    note,
-    borrower,
-    didPay
-  } = req.body;
+  const {id, amount, category, date, type, note, borrower, didPay} = req.body;
 
   await pool.query(
     `
@@ -83,16 +56,7 @@ app.post("/transactions", async (req, res) => {
     (id, amount, category, transaction_date, type, note, borrower, did_pay)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `,
-    [
-      id,
-      amount,
-      category,
-      date,
-      type,
-      note,
-      borrower ?? null,
-      didPay ?? false
-    ]
+    [id, amount, category, date, type, note, borrower ?? null, didPay ?? false]
   );
 
   res.json({ success: true });
@@ -118,15 +82,7 @@ app.delete("/transactions/:id", async (req, res) => {
 app.put("/transactions/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      amount,
-      category,
-      date,
-      type,
-      note,
-      borrower,
-      didPay
-    } = req.body;
+    const {amount, category, date, type, note, borrower, didPay} = req.body;
 
     const result = await pool.query(
       `
@@ -143,16 +99,7 @@ app.put("/transactions/:id", async (req, res) => {
         AND deleted_at IS NULL
       RETURNING *
       `,
-      [
-        amount,
-        category,
-        date,
-        type,
-        note,
-        borrower ?? null,
-        didPay ?? false,
-        id
-      ]
+      [amount, category, date, type, note, borrower ?? null, didPay ?? false, id]
     );
 
     if (result.rowCount === 0) {
@@ -173,66 +120,6 @@ app.put("/transactions/:id", async (req, res) => {
     });
   } catch (err) {
     console.error("UPDATE TRANSACTION ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/transactions/import", async (req, res) => {
-  try {
-    const {
-      fingerprint,
-      amount,
-      merchant,
-      date,
-      source,
-      rawText
-    } = req.body;
-
-    const existing = await pool.query(
-      "SELECT 1 FROM transactions WHERE fingerprint = $1",
-      [fingerprint]
-    );
-
-    if (existing.rowCount > 0) {
-      return res.status(200).json({ skipped: true });
-    }
-
-    const learned = await pool.query(
-      `
-      SELECT category, note
-      FROM transactions
-      WHERE destination = $1
-        AND category IS NOT NULL
-      ORDER BY updated_at DESC
-      LIMIT 1
-      `,
-      [merchant]
-    );
-
-    const category = learned.rows[0]?.category ?? "Uncategorized";
-    const note = learned.rows[0]?.note ?? null;
-
-    await pool.query(
-      `
-      INSERT INTO transactions
-      (id, amount, category, note, transaction_date, type, source, destination, fingerprint)
-      VALUES
-      (gen_random_uuid(), $1, $2, $3, $4, 'Debit', $5, $6, $7)
-      `,
-      [
-        amount,
-        category,
-        note,
-        date,                
-        source,             
-        merchant,          
-        fingerprint
-      ]
-    );
-
-    res.status(201).json({ imported: true });
-  } catch (err) {
-    console.error("IMPORT ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -276,30 +163,3 @@ app.post("/gmail/import", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-app.get("/auth/google", (req, res) => {
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
-    scope: ["https://www.googleapis.com/auth/gmail.readonly"]
-  });
-
-  res.redirect(authUrl);
-});
-
-app.get("/auth/google/callback", async (req, res) => {
-  try {
-    const { code } = req.query;
-
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-
-    fs.writeFileSync("tokens.json", JSON.stringify(tokens, null, 2));
-
-    res.send("✅ Gmail connected successfully. You can close this tab.");
-  } catch (err) {
-    console.error("OAuth Error:", err);
-    res.status(500).send("OAuth failed");
-  }
-});
-
