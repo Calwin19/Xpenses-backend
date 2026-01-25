@@ -9,7 +9,6 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Only load tokens if they exist
 if (fs.existsSync("tokens.json")) {
   const tokens = JSON.parse(fs.readFileSync("tokens.json"));
   oauth2Client.setCredentials(tokens);

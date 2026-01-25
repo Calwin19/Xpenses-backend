@@ -1,10 +1,10 @@
 const { Pool } = require("pg");
 
-console.log("DATABASE_URL =", process.env.DATABASE_URL);
+const isLocal = process.env.NODE_ENV !== "production";
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: isLocal ? false : { rejectUnauthorized: false }
 });
 
 module.exports = pool;
-

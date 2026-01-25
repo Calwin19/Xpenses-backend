@@ -163,3 +163,88 @@ app.post("/gmail/import", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get("/assets", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.name,
+        a.type,
+        a.institution,
+        av.value AS latest_value,
+        av.recorded_at::double precision AS latest_timestamp
+      FROM assets a
+      LEFT JOIN LATERAL (
+        SELECT value, recorded_at
+        FROM asset_values
+        WHERE asset_id = a.id
+        ORDER BY recorded_at DESC
+        LIMIT 1
+      ) av ON true
+      WHERE a.deleted_at IS NULL
+      ORDER BY a.name
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET ASSETS ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/assets", async (req, res) => {
+  const { id, name, type, institution } = req.body;
+
+  await pool.query(
+    `
+    INSERT INTO assets
+    (id, name, type, institution)
+    VALUES ($1, $2, $3, $4)
+    `,
+    [id, name, type, institution]
+  );
+
+  res.json({ success: true });
+});
+
+app.get("/assets/:id/history", async (req, res) => {
+  const asset_id = req.params.id;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT 
+        value,
+        recorded_at::double precision AS timestamp,
+        note
+      FROM asset_values
+      WHERE asset_id = $1
+      ORDER BY recorded_at ASC
+      `,
+      [asset_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET ASSET HISTORY ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/assets/:id/value", async (req, res) => {
+  const asset_id = req.params.id;
+  const { id, value, note } = req.body;
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  await pool.query(
+    `
+    INSERT INTO asset_values
+    (id, asset_id, value, recorded_at, note)
+    VALUES ($1, $2, $3, $4, $5)
+    `,
+    [id, asset_id, value, timestamp, note]
+  );
+
+  res.json({ success: true });
+});
