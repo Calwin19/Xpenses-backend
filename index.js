@@ -41,39 +41,61 @@ const pool = require("./db");
 
 app.get("/transactions", async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id,
-              amount::float AS amount,
-              category,
-              transaction_date AS date,
-              type,
-              note
-       FROM transactions
-       WHERE deleted_at IS NULL
-       ORDER BY transaction_date DESC`
-    );
+    const result = await pool.query(`
+      SELECT
+        id,
+        amount::float AS amount,
+        category,
+        transaction_date::double precision AS timestamp,
+        type,
+        note,
+        source,
+        destination,
+        borrower,
+        did_pay
+      FROM transactions
+      WHERE deleted_at IS NULL
+      ORDER BY transaction_date DESC
+    `);
 
     res.json(result.rows);
   } catch (err) {
+    console.error("GET TRANSACTIONS ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post("/transactions", async (req, res) => {
-  try {
-    const { id, amount, category, date, type, note } = req.body;
+  const {
+    id,
+    amount,
+    category,
+    date,
+    type,
+    note,
+    borrower,
+    didPay
+  } = req.body;
 
-    await pool.query(
-      `INSERT INTO transactions
-       (id, amount, category, transaction_date, type, note)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, amount, category, date, type, note]
-    );
+  await pool.query(
+    `
+    INSERT INTO transactions
+    (id, amount, category, transaction_date, type, note, borrower, did_pay)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `,
+    [
+      id,
+      amount,
+      category,
+      date,
+      type,
+      note,
+      borrower ?? null,
+      didPay ?? false
+    ]
+  );
 
-    res.status(201).json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ success: true });
 });
 
 app.delete("/transactions/:id", async (req, res) => {
@@ -96,7 +118,15 @@ app.delete("/transactions/:id", async (req, res) => {
 app.put("/transactions/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount, category, date, type, note } = req.body;
+    const {
+      amount,
+      category,
+      date,
+      type,
+      note,
+      borrower,
+      didPay
+    } = req.body;
 
     const result = await pool.query(
       `
@@ -106,12 +136,23 @@ app.put("/transactions/:id", async (req, res) => {
           transaction_date = $3,
           type = $4,
           note = $5,
+          borrower = $6,
+          did_pay = $7,
           updated_at = NOW()
-      WHERE id = $6
+      WHERE id = $8
         AND deleted_at IS NULL
       RETURNING *
       `,
-      [amount, category, date, type, note, id]
+      [
+        amount,
+        category,
+        date,
+        type,
+        note,
+        borrower ?? null,
+        didPay ?? false,
+        id
+      ]
     );
 
     if (result.rowCount === 0) {
@@ -122,9 +163,13 @@ app.put("/transactions/:id", async (req, res) => {
       id: result.rows[0].id,
       amount: Number(result.rows[0].amount),
       category: result.rows[0].category,
-      date: result.rows[0].transaction_date,
+      timestamp: Number(result.rows[0].transaction_date),
       type: result.rows[0].type,
-      note: result.rows[0].note
+      note: result.rows[0].note,
+      source: result.rows[0].source,
+      destination: result.rows[0].destination,
+      borrower: result.rows[0].borrower,
+      did_pay: result.rows[0].did_pay
     });
   } catch (err) {
     console.error("UPDATE TRANSACTION ERROR:", err);
@@ -143,7 +188,6 @@ app.post("/transactions/import", async (req, res) => {
       rawText
     } = req.body;
 
-    // Prevent duplicates
     const existing = await pool.query(
       "SELECT 1 FROM transactions WHERE fingerprint = $1",
       [fingerprint]
@@ -153,26 +197,42 @@ app.post("/transactions/import", async (req, res) => {
       return res.status(200).json({ skipped: true });
     }
 
+    const learned = await pool.query(
+      `
+      SELECT category, note
+      FROM transactions
+      WHERE destination = $1
+        AND category IS NOT NULL
+      ORDER BY updated_at DESC
+      LIMIT 1
+      `,
+      [merchant]
+    );
+
+    const category = learned.rows[0]?.category ?? "Uncategorized";
+    const note = learned.rows[0]?.note ?? null;
+
     await pool.query(
       `
       INSERT INTO transactions
-      (id, amount, category, transaction_date, type, note, fingerprint, source)
+      (id, amount, category, note, transaction_date, type, source, destination, fingerprint)
       VALUES
-      (gen_random_uuid(), $1, $2, $3, 'Debit', $4, $5, $6)
+      (gen_random_uuid(), $1, $2, $3, $4, 'Debit', $5, $6, $7)
       `,
       [
         amount,
-        "Uncategorized",
-        date,
-        merchant,
-        fingerprint,
-        source
+        category,
+        note,
+        date,                
+        source,             
+        merchant,          
+        fingerprint
       ]
     );
 
     res.status(201).json({ imported: true });
   } catch (err) {
-    console.error(err);
+    console.error("IMPORT ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
